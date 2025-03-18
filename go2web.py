@@ -1,4 +1,6 @@
 import sys
+import socket
+import ssl
 
 def parse_url(url):
     if not url.startswith("http://") and not url.startswith("https://"):
@@ -8,11 +10,30 @@ def parse_url(url):
     path = "/" + path if path else "/"
     return protocol, host, path
 
+def make_http_request(host, path, use_ssl=True):
+    port = 443 if use_ssl else 80
+    request = f"GET {path} HTTP/1.1\r\nHost: {host}\r\nUser-Agent: go2web-cli\r\nConnection: close\r\n\r\n"
+    
+    sock = socket.create_connection((host, port))
+    if use_ssl:
+        context = ssl.create_default_context()
+        sock = context.wrap_socket(sock, server_hostname=host)
+    
+    sock.sendall(request.encode())
+    response = b""
+    while True:
+        data = sock.recv(4096)
+        if not data:
+            break
+        response += data
+    sock.close()
+    
+    return response.decode(errors="ignore")
+
 def fetch_url(url):
     protocol, host, path = parse_url(url)
-    print(protocol)
-    print(host)
-    print(path)
+    response = make_http_request(host, path, use_ssl=(protocol == "https:"))
+    print(response)
     
 
 def main():
