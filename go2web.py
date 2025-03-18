@@ -41,7 +41,15 @@ def fetch_url(url):
     response = make_http_request(host, path, use_ssl=(protocol == "https:"))
     headers, body = response.split("\r\n\r\n", 1)
     print(extract_text(body))
-    
+
+
+
+def search_query(term):
+    query = term.replace(" ", "+")
+    protocol, host, path = parse_url(f"https://html.duckduckgo.com/html/?q={query}")
+    response = make_http_request(host, path)
+    links = re.findall(r'<a rel="nofollow" class="result__a" href="(.*?)">(.*?)</a>', response)
+    print(links)
 
 def main():
     if len(sys.argv) < 2:
@@ -55,7 +63,7 @@ def main():
     elif option == "-u" and len(sys.argv) > 2:
         fetch_url(sys.argv[2])
     elif option == "-s" and len(sys.argv) > 2:
-        print("search_query(sys.argv[2])")
+        search_query(sys.argv[2])
     else:
         print("Invalid command. Use -h for help.")    
 
