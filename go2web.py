@@ -2,6 +2,7 @@ import sys
 import socket
 import ssl
 import re
+import urllib.parse
 
 def parse_url(url):
     if not url.startswith("http://") and not url.startswith("https://"):
@@ -42,7 +43,11 @@ def fetch_url(url):
     headers, body = response.split("\r\n\r\n", 1)
     print(extract_text(body))
 
-
+def clean_duckduckgo_link(link):
+    match = re.search(r'uddg=([^&]+)', link)
+    if match:
+        return urllib.parse.unquote(match.group(1))
+    return link
 
 def search_query(term):
     query = term.replace(" ", "+")
@@ -50,6 +55,10 @@ def search_query(term):
     response = make_http_request(host, path)
     links = re.findall(r'<a rel="nofollow" class="result__a" href="(.*?)">(.*?)</a>', response)
     print(links)
+
+    for i, (link, title) in enumerate(links[:10], 1):
+        cleaned_link = clean_duckduckgo_link(link)
+        print(f"{i}. {extract_text(title)} - {cleaned_link}")
 
 def main():
     if len(sys.argv) < 2:
