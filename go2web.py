@@ -4,6 +4,12 @@ import ssl
 import re
 import urllib.parse
 
+def show_help():
+    print("Usage:")
+    print("  go2web -u <URL>         # Make an HTTP request to the specified URL and print the response")
+    print("  go2web -s <search-term> # Make an HTTP request to search the term using DuckDuckGo and print top 10 results")
+    print("  go2web -h               # Show this help")
+
 def parse_url(url):
     if not url.startswith("http://") and not url.startswith("https://"):
         url = "http://" + url
@@ -68,7 +74,7 @@ def main():
     option = sys.argv[1]
 
     if option == "-h":
-        print("show_help()")
+        show_help()
     elif option == "-u" and len(sys.argv) > 2:
         fetch_url(sys.argv[2])
     elif option == "-s" and len(sys.argv) > 2:
