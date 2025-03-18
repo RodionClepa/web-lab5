@@ -1,6 +1,7 @@
 import sys
 import socket
 import ssl
+import re
 
 def parse_url(url):
     if not url.startswith("http://") and not url.startswith("https://"):
@@ -30,10 +31,16 @@ def make_http_request(host, path, use_ssl=True):
     
     return response.decode(errors="ignore")
 
+def extract_text(html):
+    text = re.sub(r'<[^>]+>', '', html)  # Remove HTML tags
+    text = re.sub(r'\s+', ' ', text)  # Normalize whitespace
+    return text.strip()
+
 def fetch_url(url):
     protocol, host, path = parse_url(url)
     response = make_http_request(host, path, use_ssl=(protocol == "https:"))
-    print(response)
+    headers, body = response.split("\r\n\r\n", 1)
+    print(extract_text(body))
     
 
 def main():
