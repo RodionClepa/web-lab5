@@ -18,7 +18,7 @@ def parse_url(url):
     path = "/" + path if path else "/"
     return protocol, host, path
 
-def make_http_request(host, path, use_ssl=True):
+def make_http_request(host, path, use_ssl=True, follow_redirects=True, max_redirects=5):
     port = 443 if use_ssl else 80
     request = f"GET {path} HTTP/1.1\r\nHost: {host}\r\nUser-Agent: go2web-cli\r\nConnection: close\r\n\r\n"
     
@@ -36,7 +36,24 @@ def make_http_request(host, path, use_ssl=True):
         response += data
     sock.close()
     
-    return response.decode(errors="ignore")
+    response = response.decode(errors="ignore")
+
+    if follow_redirects:
+        # Check if the response is a redirect (e.g., 301, 302, 303, 307, 308)
+        redirect_code = [301, 302, 303, 307, 308]
+        status_code = int(response.split(" ")[1])
+        
+        if status_code in redirect_code:
+            # Look for the "Location" header to extract the redirect URL
+            location_match = re.search(r"Location: (.*?)\r\n", response)
+            if location_match:
+                new_url = location_match.group(1).strip()
+                print(f"Redirecting to {new_url}")
+                # Recursively follow the redirect
+                protocol, host, path = parse_url(new_url)
+                return make_http_request(host, path, use_ssl=(protocol == "https:"), follow_redirects=follow_redirects, max_redirects=max_redirects-1)
+    
+    return response
 
 def extract_text(html):
     text = re.sub(r'<[^>]+>', '', html)  # Remove HTML tags
@@ -68,7 +85,7 @@ def search_query(term):
 
 def main():
     if len(sys.argv) < 2:
-        print("to low arguments, calling help")
+        print("Too few arguments, calling help")
         return
 
     option = sys.argv[1]
