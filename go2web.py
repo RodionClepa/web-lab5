@@ -27,6 +27,7 @@ def show_help():
     print("  go2web -u <URL>         # Make an HTTP request to the specified URL and print the response")
     print("  go2web -s <search-term> # Make an HTTP request to search the term using DuckDuckGo and print top 10 results")
     print("  go2web -h               # Show this help")
+    print("  go2web -j or --json     # Request JSON response via content negotiation (works with -u)")
 
 def parse_url(url):
     if not url.startswith("http://") and not url.startswith("https://"):
@@ -36,15 +37,21 @@ def parse_url(url):
     path = "/" + path if path else "/"
     return protocol, host, path
 
-def make_http_request(host, path, use_ssl=True, follow_redirects=True, max_redirects=5):
+def make_http_request(host, path, use_ssl=True, follow_redirects=True, max_redirects=5, accept="text/html"):
     # Check if the response is already cached
-    cache_key = f"{host}{path}"
+    cache_key = f"{host}{path}{accept}"
     if cache_key in cache:
         print(f"Cache hit for {cache_key}")
         return cache[cache_key]
     
     port = 443 if use_ssl else 80
-    request = f"GET {path} HTTP/1.1\r\nHost: {host}\r\nUser-Agent: go2web-cli\r\nConnection: close\r\n\r\n"
+    request = (
+        f"GET {path} HTTP/1.1\r\n"
+        f"Host: {host}\r\n"
+        f"User-Agent: go2web-cli\r\n"
+        f"Accept: {accept}\r\n"
+        f"Connection: close\r\n\r\n"
+    )
     
     sock = socket.create_connection((host, port))
     if use_ssl:
@@ -64,18 +71,22 @@ def make_http_request(host, path, use_ssl=True, follow_redirects=True, max_redir
 
     if follow_redirects:
         # Check if the response is a redirect (e.g., 301, 302, 303, 307, 308)
-        redirect_code = [301, 302, 303, 307, 308]
-        status_code = int(response.split(" ")[1])
-        
-        if status_code in redirect_code:
+        redirect_codes = [301, 302, 303, 307, 308]
+        try:
+            status_code = int(response.split(" ")[1])
+        except (IndexError, ValueError):
+            status_code = 0
+
+        if status_code in redirect_codes and max_redirects > 0:
             # Look for the "Location" header to extract the redirect URL
             location_match = re.search(r"Location: (.*?)\r\n", response)
             if location_match:
                 new_url = location_match.group(1).strip()
                 print(f"Redirecting to {new_url}")
-                # Recursively follow the redirect
                 protocol, host, path = parse_url(new_url)
-                return make_http_request(host, path, use_ssl=(protocol == "https:"), follow_redirects=follow_redirects, max_redirects=max_redirects-1)
+                return make_http_request(host, path, use_ssl=(protocol == "https:"), 
+                                         follow_redirects=follow_redirects, max_redirects=max_redirects-1,
+                                         accept=accept)
     
     # Cache the response
     cache[cache_key] = response
@@ -88,11 +99,20 @@ def extract_text(html):
     text = re.sub(r'\s+', ' ', text)  # Normalize whitespace
     return text.strip()
 
-def fetch_url(url):
+def fetch_url(url, accept="text/html"):
     protocol, host, path = parse_url(url)
-    response = make_http_request(host, path, use_ssl=(protocol == "https:"))
+    response = make_http_request(host, path, use_ssl=(protocol == "https:"), accept=accept)
     headers, body = response.split("\r\n\r\n", 1)
-    print(extract_text(body))
+    # If the response headers indicate JSON, try to parse it
+    if "application/json" in headers or accept == "application/json":
+        try:
+            parsed = json.loads(body)
+            print(json.dumps(parsed, indent=2))
+        except Exception as e:
+            print("Error parsing JSON:", e)
+            print(body)
+    else:
+        print(extract_text(body))
 
 def clean_duckduckgo_link(link):
     match = re.search(r'uddg=([^&]+)', link)
@@ -112,18 +132,27 @@ def search_query(term):
         print(f"{i}. {extract_text(title)} - {cleaned_link}")
 
 def main():
-    if len(sys.argv) < 2:
+    args = []
+    accept_header = "text/html"
+    for arg in sys.argv[1:]:
+        if arg in ("-j", "--json"):
+            accept_header = "application/json"
+        else:
+            args.append(arg)
+    
+    if len(args) < 1:
         print("Too few arguments, calling help")
+        show_help()
         return
 
-    option = sys.argv[1]
+    option = args[0]
 
     if option == "-h":
         show_help()
-    elif option == "-u" and len(sys.argv) > 2:
-        fetch_url(sys.argv[2])
-    elif option == "-s" and len(sys.argv) > 2:
-        search_query(sys.argv[2])
+    elif option == "-u" and len(args) > 1:
+        fetch_url(args[1], accept=accept_header)
+    elif option == "-s" and len(args) > 1:
+        search_query(args[1])
     else:
         print("Invalid command. Use -h for help.")    
 
