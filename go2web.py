@@ -3,6 +3,24 @@ import socket
 import ssl
 import re
 import urllib.parse
+import os
+import json
+
+CACHE_FILE = 'cache.json'
+
+# Load cache from file
+def load_cache():
+    if os.path.exists(CACHE_FILE):
+        with open(CACHE_FILE, 'r') as f:
+            return json.load(f)
+    return {}
+
+# Save cache to file
+def save_cache(cache):
+    with open(CACHE_FILE, 'w') as f:
+        json.dump(cache, f)
+
+cache = load_cache()
 
 def show_help():
     print("Usage:")
@@ -19,6 +37,12 @@ def parse_url(url):
     return protocol, host, path
 
 def make_http_request(host, path, use_ssl=True, follow_redirects=True, max_redirects=5):
+    # Check if the response is already cached
+    cache_key = f"{host}{path}"
+    if cache_key in cache:
+        print(f"Cache hit for {cache_key}")
+        return cache[cache_key]
+    
     port = 443 if use_ssl else 80
     request = f"GET {path} HTTP/1.1\r\nHost: {host}\r\nUser-Agent: go2web-cli\r\nConnection: close\r\n\r\n"
     
@@ -53,6 +77,10 @@ def make_http_request(host, path, use_ssl=True, follow_redirects=True, max_redir
                 protocol, host, path = parse_url(new_url)
                 return make_http_request(host, path, use_ssl=(protocol == "https:"), follow_redirects=follow_redirects, max_redirects=max_redirects-1)
     
+    # Cache the response
+    cache[cache_key] = response
+    save_cache(cache)
+
     return response
 
 def extract_text(html):
