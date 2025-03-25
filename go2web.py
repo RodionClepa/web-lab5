@@ -95,7 +95,6 @@ def make_http_request(host, path, use_ssl=True, follow_redirects=True, max_redir
     cache[cache_key] = response
     save_cache(cache)
     return response
-
 def extract_text(html):
     text = re.sub(r'<[^>]+>', '', html)  # Remove HTML tags
     text = re.sub(r'\s+', ' ', text)  # Normalize whitespace
