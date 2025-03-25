@@ -37,7 +37,7 @@ def parse_url(url):
     path = "/" + path if path else "/"
     return protocol, host, path
 
-def make_http_request(host, path, use_ssl=True, follow_redirects=True, max_redirects=5, accept="text/html"):
+def make_http_request(host, path, use_ssl=True, follow_redirects=True, max_redirects=12, accept="text/html"):
     # Check if the response is already cached
     cache_key = f"{host}{path}{accept}"
     if cache_key in cache:
@@ -83,8 +83,18 @@ def make_http_request(host, path, use_ssl=True, follow_redirects=True, max_redir
             if location_match:
                 new_url = location_match.group(1).strip()
                 print(f"Redirecting to {new_url}")
-                protocol, host, path = parse_url(new_url)
-                return make_http_request(host, path, use_ssl=(protocol == "https:"), 
+                
+                # Handle absolute vs relative URLs
+                if new_url.startswith("http://") or new_url.startswith("https://"):
+                    # Absolute URL: Parse it fully
+                    protocol, new_host, new_path = parse_url(new_url)
+                else:
+                    # Relative URL: Reuse the original host, update the path
+                    new_host = host
+                    new_path = new_url if new_url.startswith("/") else f"/{new_url}"
+                    protocol = "https:" if use_ssl else "http:"
+                
+                return make_http_request(new_host, new_path, use_ssl=(protocol == "https:"), 
                                          follow_redirects=follow_redirects, max_redirects=max_redirects-1,
                                          accept=accept)
     
@@ -93,11 +103,24 @@ def make_http_request(host, path, use_ssl=True, follow_redirects=True, max_redir
     save_cache(cache)
 
     return response
-
 def extract_text(html):
     text = re.sub(r'<[^>]+>', '', html)  # Remove HTML tags
     text = re.sub(r'\s+', ' ', text)  # Normalize whitespace
     return text.strip()
+
+def extract_body(html):
+    # Regex to capture content inside <body>...</body>
+    body_match = re.search(r'<body.*?>(.*?)</body>', html, re.DOTALL | re.IGNORECASE)
+    if body_match:
+        body_content = body_match.group(1)
+        # Remove <script>, <style> and other unwanted tags from the body content
+        body_content = re.sub(r'<script.*?>.*?</script>', '', body_content, flags=re.DOTALL | re.IGNORECASE)  # Remove scripts
+        body_content = re.sub(r'<style.*?>.*?</style>', '', body_content, flags=re.DOTALL | re.IGNORECASE)  # Remove styles
+        body_content = re.sub(r'<[^>]+>', '', body_content)  # Remove any remaining HTML tags
+        body_content = re.sub(r'\s+', ' ', body_content)  # Normalize whitespace
+        return body_content.strip()
+    return ""
+
 
 def fetch_url(url, accept="text/html"):
     protocol, host, path = parse_url(url)
@@ -112,7 +135,7 @@ def fetch_url(url, accept="text/html"):
             print("Error parsing JSON:", e)
             print(body)
     else:
-        print(extract_text(body))
+        print(extract_body(body))
 
 def clean_duckduckgo_link(link):
     match = re.search(r'uddg=([^&]+)', link)
